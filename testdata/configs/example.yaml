@@ -1,0 +1,27 @@
+# Example benchmark configuration file
+
+benchmarks:
+  - name: "String Plus"
+    file: "testdata/snippets/string_concat.apex"
+
+  - name: "String Format"
+    file: "testdata/snippets/string_format.apex"
+
+  - name: "Inline Example"
+    code: "String s = String.join(new List<String>{'Hello', 'World'}, ' ');"
+
+# Benchmark settings
+iterations: 200
+warmup: 50
+runs: 5
+parallel: 3
+
+# Tracking options
+trackHeap: false
+trackDB: false
+
+# Output settings
+output: table  # json or table
+
+# Salesforce org (optional, uses default if not specified)
+# org: my-sandbox
