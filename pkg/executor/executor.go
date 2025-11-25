@@ -12,6 +12,10 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
+// execCommand is a variable that points to exec.Command
+// This allows us to mock it in tests
+var execCommand = exec.Command
+
 // Executor interface allows for mocking in tests
 type Executor interface {
 	Run(apexCode string, org string) (string, error)
@@ -26,6 +30,40 @@ func NewCLIExecutor() *CLIExecutor {
 	return &CLIExecutor{}
 }
 
+// ApexRunResponse represents the JSON response from `sf apex run --json`
+// Reference: https://developer.salesforce.com/docs/atlas.en-us.sfdx_cli_reference.meta/sfdx_cli_reference/cli_reference_apex_commands_unified.htm
+//
+// Expected JSON structure:
+//
+//	{
+//	  "status": 0,
+//	  "result": {
+//	    "success": true,
+//	    "compiled": true,
+//	    "compileProblem": "",
+//	    "exceptionMessage": "",
+//	    "exceptionStackTrace": "",
+//	    "line": -1,
+//	    "column": -1,
+//	    "logs": "...debug log output..."
+//	  }
+//	}
+//
+// On error, compileProblem or exceptionMessage will contain error details.
+type ApexRunResponse struct {
+	Status int `json:"status"`
+	Result struct {
+		Success             bool   `json:"success"`
+		Compiled            bool   `json:"compiled"`
+		CompileProblem      string `json:"compileProblem"`
+		ExceptionMessage    string `json:"exceptionMessage"`
+		ExceptionStackTrace string `json:"exceptionStackTrace"`
+		Line                int    `json:"line"`
+		Column              int    `json:"column"`
+		Logs                string `json:"logs"`
+	} `json:"result"`
+}
+
 // Run executes Apex code once and returns the debug log output
 func (e *CLIExecutor) Run(apexCode string, org string) (string, error) {
 	// Create temp file
@@ -35,20 +73,35 @@ func (e *CLIExecutor) Run(apexCode string, org string) (string, error) {
 	}
 	defer os.Remove(tempFile)
 
-	// Build sf command
-	args := []string{"apex", "run", "--file", tempFile}
+	// Build sf command with --json flag for structured output
+	args := []string{"apex", "run", "--file", tempFile, "--json"}
 	if org != "" {
 		args = append(args, "--target-org", org)
 	}
 
 	// Execute command
-	cmd := exec.Command("sf", args...)
+	cmd := execCommand("sf", args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("sf apex run failed: %w\nOutput: %s", err, string(output))
 	}
 
-	return string(output), nil
+	// Parse JSON response
+	var response ApexRunResponse
+	if err := json.Unmarshal(output, &response); err != nil {
+		return "", fmt.Errorf("failed to parse sf apex run JSON output: %w\nOutput: %s", err, string(output))
+	}
+
+	// Check if execution was successful
+	if !response.Result.Success {
+		if !response.Result.Compiled {
+			return "", fmt.Errorf("Apex compilation failed: %s", response.Result.CompileProblem)
+		}
+		return "", fmt.Errorf("Apex execution failed: %s", response.Result.ExceptionMessage)
+	}
+
+	// Return the logs which contain our BENCH_RESULT output
+	return response.Result.Logs, nil
 }
 
 // ExecuteParallel runs the same Apex code multiple times in parallel
@@ -124,7 +177,7 @@ func createTempApexFile(apexCode string) (string, error) {
 
 // CheckSalesforceCLI verifies that sf CLI is installed
 func CheckSalesforceCLI() error {
-	cmd := exec.Command("sf", "--version")
+	cmd := execCommand("sf", "--version")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("sf CLI not found or not working: %w\nPlease install Salesforce CLI: https://developer.salesforce.com/tools/salesforcecli", err)
@@ -137,31 +190,50 @@ func CheckSalesforceCLI() error {
 	return nil
 }
 
+// ConfigGetResponse represents the JSON response from `sf config get --json`
+// Reference: https://developer.salesforce.com/docs/atlas.en-us.sfdx_setup.meta/sfdx_setup/sfdx_dev_cli_json_support.htm
+//
+// Expected JSON structure:
+//
+//	{
+//	  "status": 0,
+//	  "result": [
+//	    {
+//	      "name": "target-org",
+//	      "value": "my-org-alias",
+//	      "location": "Local"
+//	    }
+//	  ]
+//	}
+//
+// If no config is set, result array will be empty or value will be empty/null.
+type ConfigGetResponse struct {
+	Status int `json:"status"`
+	Result []struct {
+		Name     string `json:"name"`
+		Value    string `json:"value"`
+		Location string `json:"location,omitempty"`
+	} `json:"result"`
+}
+
 // GetDefaultOrg returns the default Salesforce org alias/username
 func GetDefaultOrg() (string, error) {
-	cmd := exec.Command("sf", "config", "get", "target-org", "--json")
+	cmd := execCommand("sf", "config", "get", "target-org", "--json")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("failed to get default org: %w", err)
 	}
 
-	var result struct {
-		Status int `json:"status"`
-		Result []struct {
-			Name  string `json:"name"`
-			Value string `json:"value"`
-		} `json:"result"`
-	}
-
-	if err := json.Unmarshal(output, &result); err != nil {
+	var response ConfigGetResponse
+	if err := json.Unmarshal(output, &response); err != nil {
 		return "", fmt.Errorf("failed to parse config output: %w", err)
 	}
 
-	if len(result.Result) == 0 || result.Result[0].Value == "" || result.Result[0].Value == "null" {
+	if len(response.Result) == 0 || response.Result[0].Value == "" || response.Result[0].Value == "null" {
 		return "", fmt.Errorf("no default org configured. Run: sf org login web")
 	}
 
-	return result.Result[0].Value, nil
+	return response.Result[0].Value, nil
 }
 
 // GetOrg returns the specified org or the default org if none specified
@@ -178,17 +250,66 @@ func GetOrg(specified string) (string, error) {
 	return org, nil
 }
 
+// OrgDisplayResponse represents the JSON response from `sf org display --json`
+// Reference: https://developer.salesforce.com/docs/atlas.en-us.sfdx_cli_reference.meta/sfdx_cli_reference/cli_reference_org_commands_unified.htm
+//
+// Expected JSON structure:
+//
+//	{
+//	  "status": 0,
+//	  "result": {
+//	    "id": "00D...",
+//	    "accessToken": "...",
+//	    "instanceUrl": "https://...",
+//	    "username": "user@example.com",
+//	    "clientId": "...",
+//	    "connectedStatus": "Connected",
+//	    "alias": "my-org"
+//	  }
+//	}
+//
+// On error (e.g., org not authenticated), status will be non-zero and result may be null.
+type OrgDisplayResponse struct {
+	Status int `json:"status"`
+	Result *struct {
+		ID              string `json:"id"`
+		AccessToken     string `json:"accessToken,omitempty"`
+		InstanceUrl     string `json:"instanceUrl"`
+		Username        string `json:"username"`
+		ClientId        string `json:"clientId,omitempty"`
+		ConnectedStatus string `json:"connectedStatus"`
+		Alias           string `json:"alias,omitempty"`
+	} `json:"result"`
+}
+
 // CheckOrgAuth verifies that an org is authenticated
 func CheckOrgAuth(org string) error {
-	args := []string{"org", "display"}
+	args := []string{"org", "display", "--json"}
 	if org != "" {
 		args = append(args, "--target-org", org)
 	}
 
-	cmd := exec.Command("sf", args...)
+	cmd := execCommand("sf", args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("org %q is not authenticated: %w\nOutput: %s", org, err, string(output))
+		// Command failed - org is likely not authenticated
+		return fmt.Errorf("org %q is not authenticated: %w", org, err)
+	}
+
+	// Parse JSON response to verify org is actually connected
+	var response OrgDisplayResponse
+	if err := json.Unmarshal(output, &response); err != nil {
+		return fmt.Errorf("failed to parse org display output: %w\nOutput: %s", err, string(output))
+	}
+
+	// Check if we got valid org info
+	if response.Result == nil || response.Result.Username == "" {
+		return fmt.Errorf("org %q is not authenticated or not found", org)
+	}
+
+	// Optionally check connected status
+	if response.Result.ConnectedStatus != "" && response.Result.ConnectedStatus != "Connected" {
+		return fmt.Errorf("org %q status is %q, expected Connected", org, response.Result.ConnectedStatus)
 	}
 
 	return nil

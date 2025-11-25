@@ -2,6 +2,7 @@ package reporter
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -205,5 +206,188 @@ func TestPrintComparison_IdentifiesFastest(t *testing.T) {
 	// Check that Fast has 1.00x and star
 	if !strings.Contains(output, "1.00x") {
 		t.Error("Expected '1.00x' for fastest method")
+	}
+}
+
+func TestPrintJSON_NilWriter(t *testing.T) {
+	result := types.AggregatedResult{
+		Name:     "Test",
+		AvgCpuMs: 1.0,
+	}
+
+	// Should not panic with nil writer (defaults to stdout)
+	// We can't easily test stdout output, but at least verify no error
+	err := PrintJSON(result, nil)
+	if err != nil {
+		t.Errorf("Expected no error with nil writer, got: %v", err)
+	}
+}
+
+func TestPrintTable_NilWriter(t *testing.T) {
+	result := types.AggregatedResult{
+		Name:     "Test",
+		AvgCpuMs: 1.0,
+	}
+
+	err := PrintTable(result, nil)
+	if err != nil {
+		t.Errorf("Expected no error with nil writer, got: %v", err)
+	}
+}
+
+func TestPrintComparison_NilWriter(t *testing.T) {
+	results := []types.AggregatedResult{
+		{Name: "A", AvgCpuMs: 1.0},
+		{Name: "B", AvgCpuMs: 2.0},
+	}
+
+	err := PrintComparison(results, nil)
+	if err != nil {
+		t.Errorf("Expected no error with nil writer, got: %v", err)
+	}
+}
+
+func TestPrintTable_WithAllFields(t *testing.T) {
+	result := types.AggregatedResult{
+		Name:         "TestWithAllFields",
+		AvgCpuMs:     1.234,
+		MinCpuMs:     1.100,
+		MaxCpuMs:     1.400,
+		StdDevCpuMs:  0.123,
+		AvgWallMs:    1.5,
+		MinWallMs:    1.3,
+		MaxWallMs:    1.7,
+		StdDevWallMs: 0.2,
+		Runs:         10,
+		Iterations:   100,
+		Warmup:       10,
+	}
+
+	var buf bytes.Buffer
+	err := PrintTable(result, &buf)
+	if err != nil {
+		t.Fatalf("PrintTable failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "TestWithAllFields") {
+		t.Errorf("Table output missing name: %s", output)
+	}
+}
+
+func TestPrintJSON_SliceOfResults(t *testing.T) {
+	results := []types.AggregatedResult{
+		{Name: "Test1", AvgCpuMs: 1.0},
+		{Name: "Test2", AvgCpuMs: 2.0},
+	}
+
+	var buf bytes.Buffer
+	err := PrintJSON(results, &buf)
+	if err != nil {
+		t.Fatalf("PrintJSON failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "Test1") || !strings.Contains(output, "Test2") {
+		t.Errorf("JSON output missing expected data: %s", output)
+	}
+}
+
+func TestPrintComparison_SingleResult(t *testing.T) {
+	results := []types.AggregatedResult{
+		{Name: "OnlyOne", AvgCpuMs: 1.0, MinCpuMs: 0.9, MaxCpuMs: 1.1},
+	}
+
+	var buf bytes.Buffer
+	err := PrintComparison(results, &buf)
+	if err != nil {
+		t.Fatalf("PrintComparison should work with single result: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "OnlyOne") {
+		t.Error("Output should contain the single result name")
+	}
+	if !strings.Contains(output, "1.00x") {
+		t.Error("Single result should be marked as fastest with 1.00x")
+	}
+}
+
+// errorWriter is a writer that always returns an error
+type errorWriter struct{}
+
+func (e *errorWriter) Write(p []byte) (n int, err error) {
+	return 0, fmt.Errorf("write error")
+}
+
+func TestPrintJSON_WriteError(t *testing.T) {
+	result := types.AggregatedResult{
+		Name:     "Test",
+		AvgCpuMs: 1.0,
+	}
+
+	writer := &errorWriter{}
+	err := PrintJSON(result, writer)
+
+	if err == nil {
+		t.Error("Expected error when writer fails")
+	}
+}
+
+func TestPrintTable_LargeValues(t *testing.T) {
+	// Test with very large values
+	result := types.AggregatedResult{
+		Name:         "LargeValues",
+		AvgCpuMs:     9999.999,
+		MinCpuMs:     9000.000,
+		MaxCpuMs:     10999.999,
+		StdDevCpuMs:  1500.500,
+		AvgWallMs:    10000.000,
+		MinWallMs:    9500.000,
+		MaxWallMs:    11000.000,
+		StdDevWallMs: 1600.000,
+	}
+
+	var buf bytes.Buffer
+	err := PrintTable(result, &buf)
+	if err != nil {
+		t.Fatalf("PrintTable failed: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "LargeValues") {
+		t.Error("Table should contain name")
+	}
+	if !strings.Contains(output, "9999.999") {
+		t.Error("Table should contain large avg CPU value")
+	}
+}
+
+func TestPrintComparison_MultipleResults(t *testing.T) {
+	// Test with many results
+	results := []types.AggregatedResult{
+		{Name: "Test1", AvgCpuMs: 1.0, MinCpuMs: 0.9, MaxCpuMs: 1.1},
+		{Name: "Test2", AvgCpuMs: 2.0, MinCpuMs: 1.9, MaxCpuMs: 2.1},
+		{Name: "Test3", AvgCpuMs: 1.5, MinCpuMs: 1.4, MaxCpuMs: 1.6},
+		{Name: "Test4", AvgCpuMs: 3.0, MinCpuMs: 2.8, MaxCpuMs: 3.2},
+	}
+
+	var buf bytes.Buffer
+	err := PrintComparison(results, &buf)
+	if err != nil {
+		t.Fatalf("PrintComparison failed: %v", err)
+	}
+
+	output := buf.String()
+	// Check all results are present
+	for _, r := range results {
+		if !strings.Contains(output, r.Name) {
+			t.Errorf("Output missing result: %s", r.Name)
+		}
+	}
+
+	// Fastest should be Test1 (1.0)
+	if !strings.Contains(output, "Fastest: Test1") {
+		t.Error("Should identify Test1 as fastest")
 	}
 }

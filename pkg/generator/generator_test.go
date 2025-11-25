@@ -238,3 +238,148 @@ func TestValidateSpec(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerate_WithBothHeapAndDB(t *testing.T) {
+	spec := types.CodeSpec{
+		Name:       "BothTracking",
+		UserCode:   "Integer x = 1;",
+		Iterations: 10,
+		Warmup:     1,
+		TrackHeap:  true,
+		TrackDB:    true,
+	}
+
+	result, err := Generate(spec)
+	if err != nil {
+		t.Fatalf("Generate failed: %v", err)
+	}
+
+	// Both tracking features should be present
+	if !strings.Contains(result, "heapBefore") {
+		t.Error("Missing heap tracking")
+	}
+	if !strings.Contains(result, "dmlStatementsBefore") {
+		t.Error("Missing DML tracking")
+	}
+	if !strings.Contains(result, "soqlQueriesBefore") {
+		t.Error("Missing SOQL tracking")
+	}
+}
+
+func TestGenerate_LongUserCode(t *testing.T) {
+	// Test with longer, multi-line user code
+	spec := types.CodeSpec{
+		Name: "LongCode",
+		UserCode: `List<String> items = new List<String>();
+for (Integer i = 0; i < 10; i++) {
+    items.add('Item ' + i);
+}
+String result = String.join(items, ', ');`,
+		Iterations: 50,
+		Warmup:     5,
+		TrackHeap:  false,
+		TrackDB:    false,
+	}
+
+	result, err := Generate(spec)
+	if err != nil {
+		t.Fatalf("Generate failed: %v", err)
+	}
+
+	// All lines of user code should be present
+	if !strings.Contains(result, "List<String> items") {
+		t.Error("Missing first line of user code")
+	}
+	if !strings.Contains(result, "items.add('Item ' + i);") {
+		t.Error("Missing middle of user code")
+	}
+	if !strings.Contains(result, "String.join(items, ', ');") {
+		t.Error("Missing last line of user code")
+	}
+}
+
+func TestGenerate_SpecialCharacters(t *testing.T) {
+	spec := types.CodeSpec{
+		Name:       "SpecialChars",
+		UserCode:   "String s = 'test\\nwith\\ttabs';",
+		Iterations: 10,
+		Warmup:     1,
+		TrackHeap:  false,
+		TrackDB:    false,
+	}
+
+	result, err := Generate(spec)
+	if err != nil {
+		t.Fatalf("Generate failed: %v", err)
+	}
+
+	if !strings.Contains(result, "test\\nwith\\ttabs") {
+		t.Error("Special characters not preserved in user code")
+	}
+}
+
+func TestGenerate_EmptySetup(t *testing.T) {
+	spec := types.CodeSpec{
+		Name:       "EmptySetup",
+		UserCode:   "Integer x = 1;",
+		Setup:      "",
+		Teardown:   "System.debug('cleanup');",
+		Iterations: 10,
+		Warmup:     1,
+		TrackHeap:  false,
+		TrackDB:    false,
+	}
+
+	result, err := Generate(spec)
+	if err != nil {
+		t.Fatalf("Generate failed: %v", err)
+	}
+
+	// Should have teardown but not setup
+	if !strings.Contains(result, "System.debug('cleanup');") {
+		t.Error("Missing teardown code")
+	}
+}
+
+func TestGenerate_MaxIterations(t *testing.T) {
+	spec := types.CodeSpec{
+		Name:       "ManyIterations",
+		UserCode:   "Integer x = 1;",
+		Iterations: 10000,
+		Warmup:     1000,
+		TrackHeap:  false,
+		TrackDB:    false,
+	}
+
+	result, err := Generate(spec)
+	if err != nil {
+		t.Fatalf("Generate failed: %v", err)
+	}
+
+	if !strings.Contains(result, "Integer measurementIterations = 10000;") {
+		t.Error("Large iteration count not set correctly")
+	}
+	if !strings.Contains(result, "Integer warmupIterations = 1000;") {
+		t.Error("Large warmup count not set correctly")
+	}
+}
+
+func TestGenerate_ValidationError(t *testing.T) {
+	spec := types.CodeSpec{
+		Name:       "", // Invalid: empty name
+		UserCode:   "String s = 'test';",
+		Iterations: 10,
+		Warmup:     1,
+		TrackHeap:  false,
+		TrackDB:    false,
+	}
+
+	_, err := Generate(spec)
+	if err == nil {
+		t.Error("Expected error for invalid spec")
+	}
+
+	if !strings.Contains(err.Error(), "name") {
+		t.Errorf("Expected error about name, got: %v", err)
+	}
+}
