@@ -1,3 +1,8 @@
+[![Test and Coverage](https://github.com/ipavlic/apex-benchmark-cli/actions/workflows/test.yml/badge.svg)](https://github.com/ipavlic/apex-benchmark-cli/actions/workflows/test.yml)
+[![codecov](https://codecov.io/gh/ipavlic/apex-benchmark-cli/graph/badge.svg?token=1VTMOZE5FF)](https://codecov.io/gh/ipavlic/apex-benchmark-cli)
+[![Go Report Card](https://goreportcard.com/badge/github.com/ipavlic/apex-benchmark-cli)](https://goreportcard.com/report/github.com/ipavlic/peak)
+
+
 # Apex Benchmark CLI
 
 Benchmark Salesforce Apex code without deployment. Get performance metrics instantly via Salesforce CLI.
