@@ -100,8 +100,13 @@ func compareBenchmarks(cmd *cobra.Command, args []string) error {
 		benchSpecs = append(benchSpecs, spec)
 	}
 
-	// Run each benchmark
+	// Create executor and run
 	exec := executor.NewCLIExecutor()
+	return compareBenchmarksWithExecutor(exec, org, benchSpecs, compareIterations, compareWarmup, compareRuns, compareParallel, compareTrackHeap, compareTrackDB, compareOutput)
+}
+
+// compareBenchmarksWithExecutor is the testable core logic
+func compareBenchmarksWithExecutor(exec executor.Executor, org string, benchSpecs []types.BenchmarkSpec, iterations int, warmup int, runs int, parallel int, trackHeap bool, trackDB bool, outputFormat string) error {
 	aggregatedResults := make([]types.AggregatedResult, 0, len(benchSpecs))
 
 	for i, benchSpec := range benchSpecs {
@@ -121,10 +126,10 @@ func compareBenchmarks(cmd *cobra.Command, args []string) error {
 		spec := types.CodeSpec{
 			Name:       benchSpec.Name,
 			UserCode:   strings.TrimSpace(userCode),
-			Iterations: compareIterations,
-			Warmup:     compareWarmup,
-			TrackHeap:  compareTrackHeap,
-			TrackDB:    compareTrackDB,
+			Iterations: iterations,
+			Warmup:     warmup,
+			TrackHeap:  trackHeap,
+			TrackDB:    trackDB,
 		}
 
 		// Generate
@@ -135,7 +140,7 @@ func compareBenchmarks(cmd *cobra.Command, args []string) error {
 
 		// Execute
 		var outputs []string
-		if compareRuns == 1 {
+		if runs == 1 {
 			output, err := exec.Run(apexCode, org)
 			if err != nil {
 				return fmt.Errorf("execution failed for %s: %w", benchSpec.Name, err)
@@ -143,7 +148,7 @@ func compareBenchmarks(cmd *cobra.Command, args []string) error {
 			outputs = []string{output}
 		} else {
 			var err error
-			outputs, err = exec.ExecuteParallel(apexCode, compareRuns, compareParallel, org)
+			outputs, err = exec.ExecuteParallel(apexCode, runs, parallel, org)
 			if err != nil {
 				return fmt.Errorf("execution failed for %s: %w", benchSpec.Name, err)
 			}
@@ -160,7 +165,7 @@ func compareBenchmarks(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to aggregate results for %s: %w", benchSpec.Name, err)
 		}
-		aggregated.Warmup = compareWarmup
+		aggregated.Warmup = warmup
 
 		aggregatedResults = append(aggregatedResults, aggregated)
 		fmt.Fprintf(os.Stderr, "  Completed: avg CPU %.3f ms\n", aggregated.AvgCpuMs)
@@ -168,13 +173,13 @@ func compareBenchmarks(cmd *cobra.Command, args []string) error {
 
 	// Output
 	fmt.Fprintf(os.Stderr, "\n")
-	switch compareOutput {
+	switch outputFormat {
 	case "json":
 		return reporter.PrintJSON(aggregatedResults, os.Stdout)
 	case "table":
 		return reporter.PrintComparison(aggregatedResults, os.Stdout)
 	default:
-		return fmt.Errorf("unknown output format: %s", compareOutput)
+		return fmt.Errorf("unknown output format: %s", outputFormat)
 	}
 }
 

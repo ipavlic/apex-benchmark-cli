@@ -99,6 +99,13 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 		TrackDB:    runTrackDB,
 	}
 
+	// Create executor and run
+	exec := executor.NewCLIExecutor()
+	return runBenchmarkWithExecutor(exec, org, spec, runOutput, runRuns, runParallel)
+}
+
+// runBenchmarkWithExecutor is the testable core logic
+func runBenchmarkWithExecutor(exec executor.Executor, org string, spec types.CodeSpec, outputFormat string, runs int, parallel int) error {
 	// Generate Apex code
 	fmt.Fprintf(os.Stderr, "Generating benchmark code...\n")
 	apexCode, err := generator.Generate(spec)
@@ -107,10 +114,9 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 	}
 
 	// Execute
-	exec := executor.NewCLIExecutor()
 	var outputs []string
 
-	if runRuns == 1 {
+	if runs == 1 {
 		fmt.Fprintf(os.Stderr, "Executing benchmark (1 run)...\n")
 		output, err := exec.Run(apexCode, org)
 		if err != nil {
@@ -118,9 +124,9 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 		}
 		outputs = []string{output}
 	} else {
-		fmt.Fprintf(os.Stderr, "Executing benchmark (%d runs, %d parallel)...\n", runRuns, runParallel)
+		fmt.Fprintf(os.Stderr, "Executing benchmark (%d runs, %d parallel)...\n", runs, parallel)
 		var err error
-		outputs, err = exec.ExecuteParallel(apexCode, runRuns, runParallel, org)
+		outputs, err = exec.ExecuteParallel(apexCode, runs, parallel, org)
 		if err != nil {
 			return fmt.Errorf("execution failed: %w", err)
 		}
@@ -139,16 +145,16 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to aggregate results: %w", err)
 	}
-	aggregated.Warmup = runWarmup
+	aggregated.Warmup = spec.Warmup
 
 	// Output
 	fmt.Fprintf(os.Stderr, "\n")
-	switch runOutput {
+	switch outputFormat {
 	case "json":
 		return reporter.PrintJSON(aggregated, os.Stdout)
 	case "table":
 		return reporter.PrintTable(aggregated, os.Stdout)
 	default:
-		return fmt.Errorf("unknown output format: %s", runOutput)
+		return fmt.Errorf("unknown output format: %s", outputFormat)
 	}
 }
