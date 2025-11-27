@@ -81,17 +81,14 @@ func (e *CLIExecutor) Run(apexCode string, org string) (string, error) {
 
 	// Execute command
 	cmd := execCommand("sf", args...)
-	output, err := cmd.CombinedOutput()
+	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("sf apex run failed: %w\nOutput: %s", err, string(output))
 	}
 
-	// Extract JSON from output (skip warning messages)
-	jsonOutput := extractJSON(string(output))
-
 	// Parse JSON response
 	var response ApexRunResponse
-	if err := json.Unmarshal([]byte(jsonOutput), &response); err != nil {
+	if err := json.Unmarshal(output, &response); err != nil {
 		return "", fmt.Errorf("failed to parse sf apex run JSON output: %w\nOutput: %s", err, string(output))
 	}
 
@@ -160,17 +157,6 @@ func (e *CLIExecutor) ExecuteParallel(apexCode string, runs int, maxConcurrent i
 	}
 
 	return results, nil
-}
-
-// extractJSON finds the first JSON object in the output string
-// This handles cases where sf CLI outputs warnings before the JSON
-func extractJSON(output string) string {
-	// Find the first '{' character
-	start := strings.Index(output, "{")
-	if start == -1 {
-		return output
-	}
-	return output[start:]
 }
 
 // createTempApexFile writes Apex code to a temporary file
