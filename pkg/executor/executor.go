@@ -219,7 +219,7 @@ type ConfigGetResponse struct {
 // GetDefaultOrg returns the default Salesforce org alias/username
 func GetDefaultOrg() (string, error) {
 	cmd := execCommand("sf", "config", "get", "target-org", "--json")
-	output, err := cmd.CombinedOutput()
+	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get default org: %w", err)
 	}
