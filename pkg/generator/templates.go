@@ -21,15 +21,15 @@ for (Integer i = 0; i < warmupIterations; i++) {
 // Measurement phase
 Long totalWallTime = 0;
 Long totalCpuTime = 0;
-Long minWallTime = Long.MAX_VALUE;
-Long maxWallTime = 0;
-Integer minCpuTime = Integer.MAX_VALUE;
-Integer maxCpuTime = 0;
+Long minWallTime = null;
+Long maxWallTime = null;
+Integer minCpuTime = null;
+Integer maxCpuTime = null;
 
 {{if .TrackHeap}}
 Long totalHeapUsed = 0;
-Long minHeapUsed = Long.MAX_VALUE;
-Long maxHeapUsed = 0;
+Long minHeapUsed = null;
+Long maxHeapUsed = null;
 {{end}}
 
 {{if .TrackDB}}
@@ -54,8 +54,8 @@ for (Integer i = 0; i < measurementIterations; i++) {
     Long heapAfter = Limits.getHeapSize();
     Long heapDelta = heapAfter - heapBefore;
     totalHeapUsed += heapDelta;
-    if (heapDelta < minHeapUsed) minHeapUsed = heapDelta;
-    if (heapDelta > maxHeapUsed) maxHeapUsed = heapDelta;
+    if (minHeapUsed == null || heapDelta < minHeapUsed) minHeapUsed = heapDelta;
+    if (maxHeapUsed == null || heapDelta > maxHeapUsed) maxHeapUsed = heapDelta;
     {{end}}
 
     Long wallDelta = wallEnd - wallStart;
@@ -64,10 +64,10 @@ for (Integer i = 0; i < measurementIterations; i++) {
     totalWallTime += wallDelta;
     totalCpuTime += cpuDelta;
 
-    if (wallDelta < minWallTime) minWallTime = wallDelta;
-    if (wallDelta > maxWallTime) maxWallTime = wallDelta;
-    if (cpuDelta < minCpuTime) minCpuTime = cpuDelta;
-    if (cpuDelta > maxCpuTime) maxCpuTime = cpuDelta;
+    if (minWallTime == null || wallDelta < minWallTime) minWallTime = wallDelta;
+    if (maxWallTime == null || wallDelta > maxWallTime) maxWallTime = wallDelta;
+    if (minCpuTime == null || cpuDelta < minCpuTime) minCpuTime = cpuDelta;
+    if (maxCpuTime == null || cpuDelta > maxCpuTime) maxCpuTime = cpuDelta;
 }
 
 {{if .TrackDB}}
