@@ -74,11 +74,6 @@ func runBenchmark(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "Using default org: %s\n", org)
 	}
 
-	// Check org authentication
-	if err := executor.CheckOrgAuth(org); err != nil {
-		return err
-	}
-
 	// Read code from file if needed
 	userCode := runCode
 	if runFile != "" {

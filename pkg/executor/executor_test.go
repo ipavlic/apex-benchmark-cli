@@ -185,13 +185,3 @@ func TestGetDefaultOrg(t *testing.T) {
 		t.Logf("Default org: %s", org)
 	}
 }
-
-func TestCheckOrgAuth(t *testing.T) {
-	// This is an integration test
-	t.Skip("Integration test - requires sf CLI and authenticated org")
-
-	err := CheckOrgAuth("")
-	if err != nil {
-		t.Logf("Org auth check failed (expected if not authenticated): %v", err)
-	}
-}

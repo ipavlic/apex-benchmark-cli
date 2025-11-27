@@ -70,11 +70,6 @@ func compareBenchmarks(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "Using default org: %s\n", org)
 	}
 
-	// Check org authentication
-	if err := executor.CheckOrgAuth(org); err != nil {
-		return err
-	}
-
 	// Parse benchmark specifications
 	benchSpecs := make([]types.BenchmarkSpec, 0, len(compareBenches))
 	for _, bench := range compareBenches {

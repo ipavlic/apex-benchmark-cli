@@ -77,26 +77,6 @@ func TestHelperProcess(*testing.T) {
 			os.Exit(0)
 		}
 
-	case "org":
-		if len(args) > 2 && args[2] == "display" {
-			// Mock org display success with JSON response
-			if os.Getenv("MOCK_ORG_AUTH_FAIL") == "1" {
-				fmt.Fprintf(os.Stderr, "org not authenticated")
-				os.Exit(1)
-			}
-			jsonResponse := `{
-  "status": 0,
-  "result": {
-    "id": "00D000000000000",
-    "instanceUrl": "https://test.salesforce.com",
-    "username": "test@example.com",
-    "connectedStatus": "Connected",
-    "alias": "test-org"
-  }
-}`
-			fmt.Fprint(os.Stdout, jsonResponse)
-			os.Exit(0)
-		}
 	}
 
 	fmt.Fprintf(os.Stderr, "unknown subcommand: %s %v", subcommand, args)
@@ -245,47 +225,6 @@ func TestGetOrg_NoDefault_ReturnsError(t *testing.T) {
 	_, err := GetOrg("")
 	if err == nil {
 		t.Error("Expected error when no org specified and no default")
-	}
-}
-
-func TestCheckOrgAuth_Success(t *testing.T) {
-	oldExecCommand := execCommand
-	execCommand = mockCommand
-	defer func() { execCommand = oldExecCommand }()
-
-	err := CheckOrgAuth("test-org")
-	if err != nil {
-		t.Errorf("Expected no error, got: %v", err)
-	}
-}
-
-func TestCheckOrgAuth_NotAuthenticated(t *testing.T) {
-	oldExecCommand := execCommand
-	execCommand = func(command string, args ...string) *exec.Cmd {
-		cmd := mockCommand(command, args...)
-		cmd.Env = append(cmd.Env, "MOCK_ORG_AUTH_FAIL=1")
-		return cmd
-	}
-	defer func() { execCommand = oldExecCommand }()
-
-	err := CheckOrgAuth("bad-org")
-	if err == nil {
-		t.Error("Expected error for unauthenticated org")
-	}
-
-	if !strings.Contains(err.Error(), "not authenticated") {
-		t.Errorf("Expected 'not authenticated' error, got: %v", err)
-	}
-}
-
-func TestCheckOrgAuth_EmptyOrg(t *testing.T) {
-	oldExecCommand := execCommand
-	execCommand = mockCommand
-	defer func() { execCommand = oldExecCommand }()
-
-	err := CheckOrgAuth("")
-	if err != nil {
-		t.Errorf("Expected no error for empty org, got: %v", err)
 	}
 }
 
@@ -550,66 +489,5 @@ func TestCLIExecutor_Run_InvalidJSON(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "failed to parse") {
 		t.Errorf("Expected 'failed to parse' error, got: %v", err)
-	}
-}
-
-func TestCheckOrgAuth_InvalidJSON(t *testing.T) {
-	oldExecCommand := execCommand
-	execCommand = func(command string, args ...string) *exec.Cmd {
-		// Return invalid JSON
-		return exec.Command("echo", "invalid{json")
-	}
-	defer func() { execCommand = oldExecCommand }()
-
-	err := CheckOrgAuth("test-org")
-	if err == nil {
-		t.Error("Expected error for invalid JSON")
-	}
-
-	if !strings.Contains(err.Error(), "failed to parse") {
-		t.Errorf("Expected 'failed to parse' error, got: %v", err)
-	}
-}
-
-func TestCheckOrgAuth_NullResult(t *testing.T) {
-	oldExecCommand := execCommand
-	execCommand = func(command string, args ...string) *exec.Cmd {
-		// Return JSON with null result
-		return exec.Command("echo", `{"status": 0, "result": null}`)
-	}
-	defer func() { execCommand = oldExecCommand }()
-
-	err := CheckOrgAuth("test-org")
-	if err == nil {
-		t.Error("Expected error for null result")
-	}
-
-	if !strings.Contains(err.Error(), "not authenticated or not found") {
-		t.Errorf("Expected 'not authenticated or not found' error, got: %v", err)
-	}
-}
-
-func TestCheckOrgAuth_NotConnected(t *testing.T) {
-	oldExecCommand := execCommand
-	execCommand = func(command string, args ...string) *exec.Cmd {
-		// Return JSON with disconnected status
-		return exec.Command("echo", `{
-  "status": 0,
-  "result": {
-    "id": "00D000000000000",
-    "username": "test@example.com",
-    "connectedStatus": "Expired"
-  }
-}`)
-	}
-	defer func() { execCommand = oldExecCommand }()
-
-	err := CheckOrgAuth("test-org")
-	if err == nil {
-		t.Error("Expected error for disconnected org")
-	}
-
-	if !strings.Contains(err.Error(), "Expired") {
-		t.Errorf("Expected error about 'Expired' status, got: %v", err)
 	}
 }
