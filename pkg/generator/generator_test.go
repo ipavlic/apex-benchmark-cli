@@ -29,8 +29,8 @@ func TestGenerate_BasicCode(t *testing.T) {
 		"Integer warmupIterations = 10;",
 		"Integer measurementIterations = 100;",
 		"BENCH_RESULT:",
-		"for (Integer i = 0; i < warmupIterations; i++)",
-		"for (Integer i = 0; i < measurementIterations; i++)",
+		"< warmupIterations;",  // Loop uses UUID-based variable
+		"< measurementIterations;", // Loop uses UUID-based variable
 		"Long wallStart = System.now().getTime();",
 		"Integer cpuStart = Limits.getCpuTime();",
 	}

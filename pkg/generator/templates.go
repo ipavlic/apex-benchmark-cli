@@ -14,7 +14,7 @@ Integer warmupIterations = {{.Warmup}};
 Integer measurementIterations = {{.Iterations}};
 
 // Warmup phase - JIT optimization
-for (Integer i = 0; i < warmupIterations; i++) {
+for (Integer {{.LoopVar}} = 0; {{.LoopVar}} < warmupIterations; {{.LoopVar}}++) {
     {{.UserCode}}
 }
 
@@ -37,7 +37,7 @@ Integer dmlStatementsBefore = Limits.getDmlStatements();
 Integer soqlQueriesBefore = Limits.getQueries();
 {{end}}
 
-for (Integer i = 0; i < measurementIterations; i++) {
+for (Integer {{.LoopVar}} = 0; {{.LoopVar}} < measurementIterations; {{.LoopVar}}++) {
     {{if .TrackHeap}}
     Long heapBefore = Limits.getHeapSize();
     {{end}}
